@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Loggers>
+        <Logger name="com.blueyonder.abpp.approval" level="DEBUG" additivity="false" />
+        <Logger name="com.blueyonder.abpp.cea" level="DEBUG" additivity="false" />
+        <Logger name="com.blueyonder.abpp.core" level="INFO" additivity="false" />
+        <Root level="INFO" />
+    </Loggers>
+</Configuration>

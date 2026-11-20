@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+    <appender name="FILE" class="org.apache.log4j.RollingFileAppender">
+        <param name="File" value="logs/tmria.log" />
+    </appender>
+    <category name="com.blueyonder.tms.tmria">
+        <priority value="DEBUG" />
+    </category>
+    <category name="com.blueyonder.tms.job">
+        <priority value="INFO" />
+    </category>
+    <root>
+        <priority value="INFO" />
+        <appender-ref ref="FILE" />
+    </root>
+</log4j:configuration>

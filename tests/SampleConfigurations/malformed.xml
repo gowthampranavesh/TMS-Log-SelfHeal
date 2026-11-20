@@ -1,0 +1,4 @@
+<log4j:configuration>
+    <category name="broken">
+        <priority value="DEBUG"
+</log4j:configuration>
