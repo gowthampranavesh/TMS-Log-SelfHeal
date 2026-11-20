@@ -2,57 +2,63 @@
 
 ## 1. System Overview
 
-`TMS-Log-SelfHeal` is a centralized Windows PowerShell 5.1 automation agent executed on a management/jump server via Windows Task Scheduler (every 24 hours). It connects to remote Blue Yonder TMS Windows servers over WinRM, discovers logging configuration files defined in a centralized XML registry, detects `DEBUG` logger configurations, tracks their duration persistently, and optionally remediates loggers that remain in `DEBUG` for 48 hours or more.
+`TMS-Log-SelfHeal` is a centralized Windows PowerShell 5.1 automation agent executed on a management server via Windows Task Scheduler (every 24 hours) under a Group Managed Service Account (`gMSA`). It connects to remote Blue Yonder TMS Windows servers over WinRM (Kerberos), discovers exact logging configuration files defined in a centralized XML registry, detects `DEBUG` logger configurations, tracks their duration persistently, and optionally remediates loggers that remain in `DEBUG` for 48 hours or more.
 
-## 2. End-to-End Execution Pipeline
+## 2. Architecture Diagrams
+
+### 2.1 Discovery, Parsing & 48-Hour Tracking Pipeline
+
+```mermaid
+flowchart LR
+    TS["Task Scheduler<br/>(gMSA, 24h Run)"] --> MAIN["Main.ps1 + Execution Lock<br/>(AgentConfig.json)"]
+    MAIN --> INV["Inventory + Rules<br/>(CSV + LogFileRegistry.xml + DriveMap)"]
+    INV --> WINRM["WinRM Kerberos<br/>(Throttled PSSessions)"]
+    WINRM --> DISC["Exact File Discovery<br/>(Excludes *.yyyyMMdd_HHmmss backups)"]
+    DISC --> PARSE["Format-Aware Parsers<br/>(Read-Log4jXml / Read-PropertiesFile)"]
+    PARSE --> TRACK["48h Persistent State Store<br/>(data/debug-tracking.json)"]
+```
+
+### 2.2 Safe Remediation, Validation & Rollback Flow
+
+```mermaid
+flowchart LR
+    ELIG["Eligible (>= 48h)<br/>Pre-flight Hash + DEBUG Check"] --> BAK["Same-Folder Backup<br/>(<file>.yyyyMMdd_HHmmss)"]
+    BAK --> EDIT["Targeted Edit<br/>(DEBUG -> INFO)"]
+    EDIT --> VAL{"Syntax & Level<br/>Validation"}
+    VAL -- PASS --> REP["Detection & Audit Reports<br/>(CSV + Structured Logs)"]
+    VAL -- FAIL --> RB["Auto Rollback<br/>(Restore Backup)"]
+```
+
+## 3. End-to-End Execution Pipeline
 
 1. **Initialization & Concurrency Guard (`src/Main.ps1`, `src/Common/`)**
-   - Acquires a single-instance named Mutex / lockfile to prevent overlapping scheduled runs.
+   - Acquires a single-instance lockfile (`data/agent.lock`) to prevent overlapping scheduled runs.
    - Loads `config/AgentConfig.json` and initializes structured logging (`logs/`).
 2. **Inventory & Configuration Load (`src/Discovery/`, `src/Configuration/`)**
-   - Queries Splunk REST API (or imports CSV/XML/JSON export) and normalizes server records (`Customer`, `Hostname`, `ServerType`, `Environment`, `Status`).
-   - Deduplicates hostnames, drops invalid entries, and applies include/exclude filters.
-   - Loads `config/LogFileRegistry.xml` (enabled components only) and `config/ServerDriveMapping.json`.
+   - Loads server inventory from CSV (`Inventory.SourceType = "File"`, with Splunk REST API ready for future activation), normalizes fields (`Customer`, `Hostname`, `ServerType`, `Environment`, `Status`), deduplicates hostnames, and applies filters.
+   - Loads enabled components from `config/LogFileRegistry.xml` and drive rules from `config/ServerDriveMapping.json`.
 3. **Drive Resolution & Remote Discovery (`src/Configuration/`, `src/Scanner/`)**
-   - Resolves `{DRIVE}` per server using regex rules in `ServerDriveMapping.json` (`PR*` -> `F:`, `DL*`/`FR*`/default -> `D:`).
-   - Opens throttled WinRM sessions (`MaxConcurrentServers`) to reachable servers; logs `SERVER_UNAVAILABLE` and continues if a host is offline.
-   - Expands wildcard paths from the registry on the remote server and collects matching file metadata.
+   - Resolves `{DRIVE}` per server (`PR*` -> `F:`, `DL*`/`FR*`/default -> `D:`).
+   - Opens WinRM Kerberos sessions using the gMSA identity; logs `SERVER_UNAVAILABLE` and continues if a host is offline.
+   - Expands wildcard paths remotely with strict exact filename/extension matching, excluding same-folder timestamped backup files.
 4. **Parsing & DEBUG Detection (`src/Scanner/Parsers/`)**
-   - Routes `.xml` files to `Read-Log4jXml.ps1` and `.properties` files to `Read-PropertiesFile.ps1`.
-   - Evaluates logger names against the component's configured `<LoggerPatterns>`.
-   - Flags unknown/unparseable structures as `MANUAL_REVIEW_REQUIRED` without modifying them.
+   - Routes `.xml` files to `Read-Log4jXml.ps1` (Log4j 1.x & 2.x) and `.properties` files to `Read-PropertiesFile.ps1`.
+   - Evaluates logger names against `<LoggerPatterns>` and flags unrecognized structures as `MANUAL_REVIEW_REQUIRED`.
 5. **Persistent 48-Hour Tracking (`src/Tracking/`)**
-   - Loads `data/debug-tracking.json`.
-   - Keyed by `(Hostname, FilePath, LoggerName)`:
-     - New `DEBUG` -> creates record with `FirstDetectedUtc`, status `DEBUG_DETECTED`.
-     - Existing `DEBUG` (< 48h) -> updates `LastDetectedUtc`, preserves `FirstDetectedUtc`, status `TRACKING`.
-     - Existing `DEBUG` (>= 48h) -> marks `ELIGIBLE`.
-     - Changed to `INFO` (or non-DEBUG) -> closes active record.
-     - File/logger missing -> marks `INACTIVE` (preserves history).
-     - Server unreachable -> preserves existing `FirstDetectedUtc` untouched.
-   - **Timing Limitation**: Because the agent runs once every 24 hours, the 48-hour clock starts at *first detection* rather than the exact moment an engineer enabled `DEBUG`.
+   - Loads `data/debug-tracking.json`, keyed by `(Hostname, FilePath, LoggerName)`.
+   - Retains `FirstDetectedUtc` across daily runs, marks `ELIGIBLE` at `>= 48` hours, closes records when changed to `INFO`, marks `INACTIVE` if missing, and preserves timestamps when a server is offline.
+   - **Timing Limitation**: Because scans run every 24 hours, the 48-hour clock starts at *first detection* rather than the exact moment `DEBUG` was enabled.
 6. **Safe Remediation & Rollback (`src/Remediation/`)**
    - Runs only if `DryRun -eq $false` and `EnableRemediation -eq $true`.
-   - Pre-flight checks: server reachable, file exists, re-read confirms logger is still `DEBUG` and file hash/content matches expectations, duration >= 48h.
-   - Steps: timestamped backup (`backups/`) -> targeted `DEBUG` to `INFO` edit -> syntax validation -> on validation failure, automatic restore from backup (`ROLLBACK_COMPLETED`).
-   - Never restarts TMS services and never touches runtime `.log` files.
+   - Re-verifies file hash and `DEBUG` state, creates a same-folder backup (`<filename>.yyyyMMdd_HHmmss`), updates only the targeted logger to `INFO`, validates syntax, and rolls back automatically on failure—without restarting TMS services or touching runtime logs.
 7. **Reporting & Audit (`src/Reporting/`)**
-   - Writes consolidated Detection Report CSV, Remediation Report CSV, and structured audit logs (`logs/`).
+   - Writes consolidated `DetectionReport_*.csv`, `RemediationAudit_*.csv`, and structured execution logs (`logs/`).
 
-## 3. Persistent Storage Design Evaluation
+## 4. Persistent Storage Design Evaluation
 
 | Option | Pros | Cons | Recommendation |
 |---|---|---|---|
-| **Structured JSON (`data/debug-tracking.json`)** | Zero third-party dependencies; native to PS 5.1 (`ConvertTo-Json`/`ConvertFrom-Json`); human-inspectable; easy atomic write + `.bak` rotation | Single-writer only (mitigated by Mutex lock in `Main.ps1`) | **Recommended Default** for centralized single-scheduler execution |
-| **CSV** | Easy to open in Excel | Poor support for nested metadata, schema evolution, and multi-line fields | Not recommended for primary state |
-| **SQLite** | ACID transactions | Requires third-party binaries/modules (`PSSQLite` / `System.Data.SQLite.dll`), violating zero-dependency goal | Optional future upgrade |
-| **SQL Server** | Multi-writer enterprise scale | Requires external DB provisioning and network/firewall setup | Optional future upgrade via built-in `System.Data.SqlClient` |
-
-## 4. Open Questions / Missing Information
-
-Before finalizing format-specific parser rules and Splunk/WinRM integration, confirm:
-1. **Splunk Connectivity**: Exact Splunk REST API endpoint, authentication method (Bearer Token vs. username/password), and SPL query/field names.
-2. **WinRM Configuration**: Whether target servers use HTTP (`5985`) or HTTPS (`5986`), Kerberos/NTLM/CredSSP, and whether a gMSA or service account is used.
-3. **Actual Log4j & Properties Schemas**: Sample production/non-prod `log4j.xml` (Log4j 1.x `<category>`/`<priority>` vs. Log4j 2.x `<Logger level="DEBUG">`) and `TM/Properties/*.properties` files to ensure 100% parser coverage.
-4. **Logger Scope**: Whether `<Pattern>*</Pattern>` should be narrowed for specific components (e.g., excluding root loggers or specific third-party packages).
-5. **Central vs. Remote Backups**: Whether timestamped backups should be stored centrally on the agent server (`backups/<Hostname>/...`), on the target server, or both.
+| **Structured JSON (`data/debug-tracking.json`)** | Zero third-party dependencies; native to PS 5.1; human-inspectable; atomic write + `.bak` rotation | Single-writer only (mitigated by `agent.lock`) | **Recommended Default** for centralized single-scheduler execution |
+| **CSV** | Easy to open in Excel | Poor support for nested metadata and schema evolution | Not recommended for primary state |
+| **SQLite** | ACID transactions | Requires third-party binaries/modules (`PSSQLite`), violating zero-dependency goal | Optional future upgrade |
+| **SQL Server** | Multi-writer enterprise scale | Requires external DB provisioning | Optional future upgrade via `System.Data.SqlClient` |
