@@ -1,0 +1,41 @@
+{
+  "DryRun": true,
+  "EnableRemediation": false,
+  "EnableBackup": true,
+  "EnableRollback": true,
+  "ScanIntervalHours": 24,
+  "DebugThresholdHours": 48,
+  "RestartServices": false,
+  "MaxConcurrentServers": 10,
+  "WinRM": {
+    "UseSSL": false,
+    "Port": 5985,
+    "Authentication": "Default",
+    "OperationTimeoutSec": 60
+  },
+  "Splunk": {
+    "SourceType": "API",
+    "BaseUrl": "https://splunk.example.com:8089",
+    "SavedSearchOrQuery": "search index=tms_inventory | table customer, hostname, server_type, environment, status",
+    "OutputFormat": "json",
+    "CredentialPath": "config/splunk.cred.xml",
+    "FallbackFile": "config/ServerInventory.sample.json"
+  },
+  "Filters": {
+    "IncludeServerTypes": [],
+    "ExcludeServerTypes": [],
+    "ExcludeHostnames": []
+  },
+  "Paths": {
+    "RegistryFile": "config/LogFileRegistry.xml",
+    "DriveMappingFile": "config/ServerDriveMapping.json",
+    "TrackingFile": "data/debug-tracking.json",
+    "BackupRoot": "backups",
+    "LogRoot": "logs"
+  },
+  "RetentionDays": {
+    "Logs": 30,
+    "Backups": 90,
+    "ClosedTrackingRecords": 90
+  }
+}

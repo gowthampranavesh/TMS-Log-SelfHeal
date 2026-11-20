@@ -1,0 +1,28 @@
+{
+  "DriveMappings": [
+    {
+      "ServerPattern": "^(?i:PR)",
+      "ServerType": "PR",
+      "Drive": "F:",
+      "Description": "Production-type TMS servers use F: drive"
+    },
+    {
+      "ServerPattern": "^(?i:DL)",
+      "ServerType": "DL",
+      "Drive": "D:",
+      "Description": "DL TMS servers use D: drive"
+    },
+    {
+      "ServerPattern": "^(?i:FR)",
+      "ServerType": "FR",
+      "Drive": "D:",
+      "Description": "FR TMS servers use D: drive"
+    },
+    {
+      "ServerPattern": ".*",
+      "ServerType": "DEFAULT",
+      "Drive": "D:",
+      "Description": "Default fallback drive for all other server types"
+    }
+  ]
+}

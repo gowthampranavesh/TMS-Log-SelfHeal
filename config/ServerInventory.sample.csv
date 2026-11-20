@@ -1,0 +1,5 @@
+Customer,Hostname,ServerType,Environment,Status
+Customer A,DLTMSAPP01,DL,NONPROD,Active
+Customer A,DLTMSAPP02,DL,NONPROD,Active
+Customer B,FRTMSAPP01,FR,NONPROD,Active
+Customer C,PRTMSAPP01,PR,PROD,Active

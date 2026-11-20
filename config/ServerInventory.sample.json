@@ -1,0 +1,30 @@
+[
+  {
+    "Customer": "Customer A",
+    "Hostname": "DLTMSAPP01",
+    "ServerType": "DL",
+    "Environment": "NONPROD",
+    "Status": "Active"
+  },
+  {
+    "Customer": "Customer A",
+    "Hostname": "DLTMSAPP02",
+    "ServerType": "DL",
+    "Environment": "NONPROD",
+    "Status": "Active"
+  },
+  {
+    "Customer": "Customer B",
+    "Hostname": "FRTMSAPP01",
+    "ServerType": "FR",
+    "Environment": "NONPROD",
+    "Status": "Active"
+  },
+  {
+    "Customer": "Customer C",
+    "Hostname": "PRTMSAPP01",
+    "ServerType": "PR",
+    "Environment": "PROD",
+    "Status": "Active"
+  }
+]

@@ -1,0 +1,26 @@
+# Runtime logs, backups, and tracking data
+logs/*.log
+logs/*.csv
+logs/*.json
+!logs/.gitkeep
+
+backups/*
+!backups/.gitkeep
+
+data/*.json
+data/*.csv
+data/*.db
+data/*.lock
+!data/.gitkeep
+
+# Local secrets / credential exports
+config/*.cred.xml
+config/*.local.json
+*.pfx
+*.key
+
+# OS / Editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+*.tmp

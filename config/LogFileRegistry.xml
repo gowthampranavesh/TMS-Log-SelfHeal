@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LogConfigurations schemaVersion="1.0">
+    <!--
+      Centralized Registry for Blue Yonder TMS Logging Configurations.
+      - Use {DRIVE} as a placeholder for the resolved server drive letter (e.g., F or D).
+      - Pattern represents the logger name / key pattern (supports wildcard *), NOT the filename.
+      - Add new components or paths here without modifying PowerShell code.
+    -->
+
+    <Component name="TM_PROPERTIES" enabled="true" description="TM Core Java Properties">
+        <FilePath>{DRIVE}:\TM\Properties\*.properties</FilePath>
+        <FileType>properties</FileType>
+        <LoggerPatterns>
+            <Pattern>*</Pattern>
+        </LoggerPatterns>
+    </Component>
+
+    <Component name="TMRIA" enabled="true" description="TMWEB TMRIA Log4j XML">
+        <FilePath>{DRIVE}:\TMWEB\TMRIA\config\*\log4j.xml</FilePath>
+        <FileType>xml</FileType>
+        <LoggerPatterns>
+            <Pattern>*</Pattern>
+        </LoggerPatterns>
+    </Component>
+
+    <Component name="TMGR" enabled="true" description="TMWEB TMGR Log4j XML">
+        <FilePath>{DRIVE}:\TMWEB\TMGR\config\*\log4j.xml</FilePath>
+        <FileType>xml</FileType>
+        <LoggerPatterns>
+            <Pattern>*</Pattern>
+        </LoggerPatterns>
+    </Component>
+
+    <Component name="ABPP" enabled="true" description="ABPP Deployments Log4j XML">
+        <FilePath>{DRIVE}:\Deployments\*\config\log4j.xml</FilePath>
+        <FileType>xml</FileType>
+        <LoggerPatterns>
+            <Pattern>*</Pattern>
+        </LoggerPatterns>
+    </Component>
+
+    <!-- Example disabled future component -->
+    <Component name="APIBatch" enabled="false" description="API Batch Module (enable when path confirmed)">
+        <FilePath>{DRIVE}:\TM\APIBatch\config\log4j.xml</FilePath>
+        <FileType>xml</FileType>
+        <LoggerPatterns>
+            <Pattern>*</Pattern>
+        </LoggerPatterns>
+    </Component>
+
+</LogConfigurations>
